@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Room {
+  id                 String          @id @default(cuid())
+  title              String
+  confirmedStartDate DateTime?       @db.Date
+  confirmedEndDate   DateTime?       @db.Date
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  members            Member[]
+  availableDates     AvailableDate[]
+  pins               Pin[]
+  buckets            BucketList[]
+}
+
+model Member {
+  id             String          @id @default(cuid())
+  roomId         String
+  nickname       String
+  createdAt      DateTime        @default(now())
+  room           Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  availableDates AvailableDate[]
+  pins           Pin[]
+  reactions      PinReaction[]
+  buckets        BucketList[]
+
+  @@index([roomId])
+}
+
+model AvailableDate {
+  id        String   @id @default(cuid())
+  roomId    String
+  memberId  String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, date])
+  @@index([roomId, date])
+}
+
+model Pin {
+  id        String        @id @default(cuid())
+  roomId    String
+  memberId  String
+  title     String
+  category  PinCategory
+  url       String?
+  memo      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  room      Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  member    Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  reactions PinReaction[]
+
+  @@index([roomId, category])
+  @@index([memberId])
+}
+
+model PinReaction {
+  id           String       @id @default(cuid())
+  pinId        String
+  memberId     String
+  reactionType ReactionType
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  pin          Pin          @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  member       Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([pinId, memberId])
+  @@index([memberId])
+}
+
+model BucketList {
+  id        String   @id @default(cuid())
+  roomId    String
+  memberId  String
+  content   String
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([memberId])
+}
+
+enum PinCategory {
+  PHOTO_SPOT
+  CAFE
+  RESTAURANT
+  TOUR
+  ACCOMMODATION
+  ACTIVITY
+  ETC
+}
+
+enum ReactionType {
+  MUST
+  WANT
+}
