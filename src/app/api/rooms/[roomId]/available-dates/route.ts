@@ -72,6 +72,7 @@ export async function GET(_request: Request, context: RoomRouteContext) {
       {
         date: string;
         count: number;
+        availableMembers: string[];
         members: ReturnType<typeof serializeMember>[];
       }
     >();
@@ -89,6 +90,7 @@ export async function GET(_request: Request, context: RoomRouteContext) {
           .set(date, {
             date,
             count: 0,
+            availableMembers: [],
             members: [],
           })
           .get(date);
@@ -98,6 +100,7 @@ export async function GET(_request: Request, context: RoomRouteContext) {
       }
 
       group.count += 1;
+      group.availableMembers.push(availableDate.member.nickname);
       group.members.push(serializeMember(availableDate.member));
     }
 

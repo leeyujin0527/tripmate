@@ -1,5 +1,3 @@
-import type { NextRequest } from "next/server";
-
 import type { RoomRouteContext } from "@/lib/api";
 import {
   apiSuccess,
@@ -8,37 +6,15 @@ import {
   requireMember,
   requireRoom,
 } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
-import { getPinReactionCounts, serializePin } from "@/lib/serializers";
 import {
-  createPinSchema,
-  pinListQuerySchema,
-  type PinSortValue,
-} from "@/lib/validators";
+  fetchLinkPreviewMetadata,
+  getFallbackLinkPreview,
+} from "@/lib/link-preview";
+import { prisma } from "@/lib/prisma";
+import { serializePin } from "@/lib/serializers";
+import { createPinSchema } from "@/lib/validators";
 
-const sortPins = <T extends { createdAt: Date; reactions?: { reactionType: "MUST" | "WANT" }[] }>(
-  pins: T[],
-  sort: PinSortValue,
-) =>
-  [...pins].sort((a, b) => {
-    const aCounts = getPinReactionCounts(a);
-    const bCounts = getPinReactionCounts(b);
-    const latest = b.createdAt.getTime() - a.createdAt.getTime();
-
-    if (sort === "popular") {
-      return bCounts.totalCount - aCounts.totalCount || latest;
-    }
-
-    if (sort === "must") {
-      return bCounts.mustCount - aCounts.mustCount || latest;
-    }
-
-    if (sort === "want") {
-      return bCounts.wantCount - aCounts.wantCount || latest;
-    }
-
-    return latest;
-  });
+export const runtime = "nodejs";
 
 export async function POST(request: Request, context: RoomRouteContext) {
   try {
@@ -48,14 +24,21 @@ export async function POST(request: Request, context: RoomRouteContext) {
     await requireRoom(roomId);
     await requireMember(roomId, body.memberId);
 
+    const preview = await fetchLinkPreviewMetadata(body.url);
+    const fallbackPreview = getFallbackLinkPreview(body.url);
+
     const pin = await prisma.pin.create({
       data: {
         roomId,
         memberId: body.memberId,
-        title: body.title,
-        category: body.category,
-        url: body.url ?? null,
+        title: preview.previewTitle ?? fallbackPreview.previewTitle ?? body.url,
+        category: "ETC",
+        url: body.url,
         memo: body.memo ?? null,
+        previewTitle: preview.previewTitle,
+        previewDescription: preview.previewDescription,
+        previewImage: preview.previewImage,
+        previewSiteName: preview.previewSiteName,
       },
       include: {
         member: true,
@@ -69,28 +52,22 @@ export async function POST(request: Request, context: RoomRouteContext) {
   }
 }
 
-export async function GET(request: NextRequest, context: RoomRouteContext) {
+export async function GET(_request: Request, context: RoomRouteContext) {
   try {
     const { roomId } = await context.params;
-    const query = pinListQuerySchema.parse({
-      category: request.nextUrl.searchParams.get("category") ?? undefined,
-      sort: request.nextUrl.searchParams.get("sort") ?? undefined,
-    });
 
     await requireRoom(roomId);
 
     const pins = await prisma.pin.findMany({
-      where: {
-        roomId,
-        category: query.category,
-      },
+      where: { roomId },
       include: {
         member: true,
         reactions: true,
       },
+      orderBy: { createdAt: "desc" },
     });
 
-    return apiSuccess(sortPins(pins, query.sort).map((pin) => serializePin(pin)));
+    return apiSuccess(pins.map((pin) => serializePin(pin)));
   } catch (error) {
     return handleApiError(error);
   }

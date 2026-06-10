@@ -12,12 +12,10 @@ export const pinCategories = [
 
 export const reactionTypes = ["MUST", "WANT"] as const;
 export const reactionRequestTypes = ["MUST", "WANT", "NONE"] as const;
-export const pinSortOptions = ["latest", "popular", "must", "want"] as const;
 
 export type PinCategoryValue = (typeof pinCategories)[number];
 export type ReactionTypeValue = (typeof reactionTypes)[number];
 export type ReactionRequestTypeValue = (typeof reactionRequestTypes)[number];
-export type PinSortValue = (typeof pinSortOptions)[number];
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -36,6 +34,16 @@ const isValidDateOnly = (value: string) => {
 };
 
 const uniqueValues = (values: string[]) => new Set(values).size === values.length;
+
+const isHttpUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 const emptyToUndefined = (value: unknown) => {
   if (typeof value === "string" && value.trim() === "") {
@@ -80,9 +88,16 @@ export const confirmedDateSchema = z
 
 export const pinCategorySchema = z.enum(pinCategories);
 
+const urlSchema = z
+  .string()
+  .trim()
+  .url("올바른 URL을 입력해주세요.")
+  .max(2048)
+  .refine(isHttpUrl, "http 또는 https 링크만 저장할 수 있어요.");
+
 const optionalUrlSchema = z.preprocess(
   emptyToUndefined,
-  z.string().trim().url("올바른 URL을 입력해주세요.").max(2048).optional(),
+  urlSchema.optional(),
 );
 
 const optionalMemoSchema = z.preprocess(
@@ -92,9 +107,7 @@ const optionalMemoSchema = z.preprocess(
 
 export const createPinSchema = z.object({
   memberId: idSchema,
-  title: z.string().trim().min(1, "핀 제목을 입력해주세요.").max(100),
-  category: pinCategorySchema,
-  url: optionalUrlSchema,
+  url: urlSchema,
   memo: optionalMemoSchema,
 });
 
@@ -127,11 +140,6 @@ export const reactionSchema = z.object({
 export const createBucketSchema = z.object({
   memberId: idSchema,
   content: z.string().trim().min(1, "버킷리스트 내용을 입력해주세요.").max(300),
-});
-
-export const pinListQuerySchema = z.object({
-  category: pinCategorySchema.optional(),
-  sort: z.enum(pinSortOptions).optional().default("latest"),
 });
 
 export const toDateOnly = (value: string) => new Date(`${value}T00:00:00.000Z`);

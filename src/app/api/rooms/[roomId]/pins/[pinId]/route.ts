@@ -8,9 +8,12 @@ import {
   requirePin,
   requireRoom,
 } from "@/lib/api";
+import { fetchLinkPreviewMetadata } from "@/lib/link-preview";
 import { prisma } from "@/lib/prisma";
 import { serializePin } from "@/lib/serializers";
 import { deleteByMemberSchema, updatePinSchema } from "@/lib/validators";
+
+export const runtime = "nodejs";
 
 export async function GET(_request: Request, context: PinRouteContext) {
   try {
@@ -58,13 +61,21 @@ export async function PATCH(request: Request, context: PinRouteContext) {
       throw new ApiError("작성자만 수정할 수 있습니다.", 403);
     }
 
+    const preview = body.url
+      ? await fetchLinkPreviewMetadata(body.url)
+      : undefined;
+
     const updatedPin = await prisma.pin.update({
       where: { id: pinId },
       data: {
-        title: body.title,
+        title: body.title ?? preview?.previewTitle ?? undefined,
         category: body.category,
         url: body.url,
         memo: body.memo,
+        previewTitle: preview?.previewTitle,
+        previewDescription: preview?.previewDescription,
+        previewImage: preview?.previewImage,
+        previewSiteName: preview?.previewSiteName,
       },
       include: {
         member: true,

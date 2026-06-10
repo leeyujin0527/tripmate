@@ -48,6 +48,10 @@ type PinLike = {
   category: PinCategoryValue;
   url: string | null;
   memo: string | null;
+  previewTitle?: string | null;
+  previewDescription?: string | null;
+  previewImage?: string | null;
+  previewSiteName?: string | null;
   createdAt: Date;
   updatedAt: Date;
   member?: MemberLike;
@@ -129,6 +133,10 @@ export const serializePin = (
   category: pin.category,
   url: pin.url,
   memo: pin.memo,
+  previewTitle: pin.previewTitle ?? null,
+  previewDescription: pin.previewDescription ?? null,
+  previewImage: pin.previewImage ?? null,
+  previewSiteName: pin.previewSiteName ?? null,
   createdAt: formatDateTime(pin.createdAt),
   updatedAt: formatDateTime(pin.updatedAt),
   member: pin.member ? serializeMember(pin.member) : undefined,
