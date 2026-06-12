@@ -23,24 +23,30 @@ type CreateRoomErrorResponse = {
 
 type CreateRoomResponse = CreateRoomSuccessResponse | CreateRoomErrorResponse;
 
-const samplePins = [
+const scrapbookItems = [
   {
     emoji: "🌊",
-    label: "바다뷰 카페",
-    note: "친구들이 저장한 릴스",
-    tone: "bg-[#e8f6ff] text-[#17455f]",
+    title: "광안리 밤바다",
+    note: "다 같이 산책하기",
+    className: "bg-[#dff3fb] text-[#31556b] aspect-[4/5]",
   },
   {
     emoji: "🍓",
-    label: "디저트 맛집",
-    note: "꼭 가고 싶음 4",
-    tone: "bg-[#ffe9ef] text-[#6b2636]",
+    title: "딸기 케이크 카페",
+    note: "사진 예쁘게 나옴",
+    className: "bg-[#ffe6ee] text-[#7a2f48] aspect-square",
   },
   {
-    emoji: "📍",
-    label: "네이버지도 핀",
-    note: "동선에 맞춰 보기",
-    tone: "bg-[#eff7df] text-[#374b18]",
+    emoji: "🧺",
+    title: "피크닉 매트 챙기기",
+    note: "버킷리스트",
+    className: "bg-[#fff2d8] text-[#76552a] aspect-[5/4]",
+  },
+  {
+    emoji: "🏡",
+    title: "감성 숙소 후보",
+    note: "wishlist",
+    className: "bg-[#eee7ff] text-[#574878] aspect-[3/4]",
   },
 ];
 
@@ -56,7 +62,7 @@ export default function Home() {
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
-      setErrorMessage("여행방 이름을 먼저 적어주세요.");
+      setErrorMessage("여행 이름을 먼저 적어주세요.");
       return;
     }
 
@@ -100,41 +106,82 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-dvh bg-[#fffafd] text-[#241817]">
-      <section className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:grid lg:grid-cols-[1fr_0.92fr] lg:items-center lg:gap-12 lg:py-10">
-        <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#f3cfe0] bg-white/85 px-3 py-2 text-sm font-semibold shadow-sm">
+    <main className="min-h-dvh overflow-hidden text-[#32231f]">
+      <section className="mx-auto grid min-h-dvh w-full max-w-6xl gap-8 px-5 py-6 sm:px-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-10">
+        <div className="flex items-center justify-between lg:col-span-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ead8d0] bg-white/80 px-4 py-2 text-sm font-bold shadow-sm backdrop-blur">
             <span aria-hidden="true">✈️</span>
             <span>TripMate</span>
           </div>
-          <div className="hidden rounded-full border border-[#d9ead1] bg-[#f4fbeb] px-3 py-2 text-sm font-medium text-[#52613b] sm:block">
-            링크 하나로 같이 준비하기
+          <div className="hidden rounded-full border border-[#ead8d0] bg-[#fff7ef]/80 px-4 py-2 text-sm font-semibold text-[#7b5f54] shadow-sm sm:block">
+            여행 전 설렘을 모으는 공간
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col justify-center py-10 lg:py-0">
-          <div className="max-w-xl">
-            <p className="mb-4 inline-flex rounded-full bg-[#fff0f4] px-3 py-1.5 text-sm font-semibold text-[#b94a6b]">
-              여행 전 설렘을 한곳에
-            </p>
-            <h1 className="text-4xl font-bold leading-tight text-[#241817] sm:text-5xl lg:text-6xl">
-              친구들과 여행을 가장 설레게 준비하는 공간
-            </h1>
-            <p className="mt-5 text-base leading-7 text-[#6f5b56] sm:text-lg">
-              링크 하나로 친구들을 초대하고, 릴스·틱톡·맛집·카페 정보를
-              한곳에 모아보세요.
-            </p>
+        <div className="order-2 pb-8 lg:order-1 lg:pb-0">
+          <div className="columns-2 gap-3 sm:gap-4">
+            {scrapbookItems.map((item, index) => (
+              <article
+                key={item.title}
+                className={`tripmate-sticker mb-3 break-inside-avoid rounded-[8px] p-4 transition duration-200 hover:-translate-y-1 sm:mb-4 ${item.className} ${
+                  index % 2 === 0 ? "translate-y-3" : ""
+                }`}
+              >
+                <div className="flex h-full flex-col justify-between gap-6">
+                  <span className="text-4xl" aria-hidden="true">
+                    {item.emoji}
+                  </span>
+                  <div>
+                    <p className="wrap-break-word text-lg font-bold leading-snug">
+                      {item.title}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold opacity-75">
+                      {item.note}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
+
+          <div className="tripmate-card mt-6 rounded-[8px] p-4">
+            <p className="text-sm font-bold text-[#b76478]">saved mood</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["맛집", "바다", "숙소", "카페", "사진스팟"].map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-[#fff2f6] px-3 py-1.5 text-xs font-bold text-[#8f4a5c]"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="order-1 flex flex-col justify-center lg:order-2">
+          <p className="mb-4 inline-flex w-fit rounded-full bg-[#fff0f4] px-4 py-2 text-sm font-bold text-[#b76478] shadow-sm">
+            Pinterest처럼 모으고, 친구들과 같이 설레기
+          </p>
+          <h1 className="max-w-xl text-4xl font-black leading-tight text-[#32231f] sm:text-5xl lg:text-6xl">
+            여행 가기 전의 설렘을
+            <br />
+            한 장의 무드보드로.
+          </h1>
+          <p className="mt-5 max-w-lg text-base font-medium leading-8 text-[#7b5f54] sm:text-lg">
+            릴스, 블로그, 지도 링크와 하고 싶은 순간들을 친구들과 같이
+            저장해요. TripMate는 계획표보다 여행 다이어리에 가까워요.
+          </p>
 
           <form
             onSubmit={handleSubmit}
-            className="mt-8 rounded-[8px] border border-[#f2d4e1] bg-white p-4 shadow-[0_18px_60px_rgba(114,61,85,0.13)] sm:max-w-lg sm:p-5"
+            className="tripmate-paper mt-8 rounded-[8px] border border-[#ead8d0] p-4 shadow-[0_22px_70px_rgba(111,75,58,0.12)] sm:p-5"
           >
             <label
               htmlFor="room-title"
-              className="text-sm font-semibold text-[#5d4640]"
+              className="text-sm font-bold text-[#5e463e]"
             >
-              여행방 이름
+              이번 여행 이름
             </label>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row">
               <input
@@ -148,102 +195,30 @@ export default function Home() {
                 }}
                 placeholder="예: 부산 여름 여행 🌊"
                 aria-invalid={Boolean(errorMessage)}
-                className="h-12 min-w-0 flex-1 rounded-[8px] border border-[#ead2df] bg-[#fffdfd] px-4 text-base outline-none transition focus:border-[#ec7896] focus:ring-4 focus:ring-[#ffd7e0]"
+                className="h-12 min-w-0 flex-1 rounded-[8px] border border-[#ead8d0] bg-white/80 px-4 text-base font-semibold outline-none transition placeholder:text-[#c1a69a] focus:border-[#df8aa0] focus:ring-4 focus:ring-[#ffdce5]"
               />
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="h-12 rounded-[8px] bg-[#f26788] px-5 text-base font-bold text-white shadow-sm hover:bg-[#de5879]"
+                className="h-12 rounded-[8px] bg-[#df7f95] px-5 text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
               >
                 {isSubmitting ? "만드는 중..." : "여행방 만들기"}
               </Button>
             </div>
             {errorMessage ? (
               <p
-                className="mt-3 text-sm font-medium text-[#c53f5d]"
+                className="mt-3 text-sm font-bold text-[#c65c71]"
                 role="alert"
                 aria-live="polite"
               >
                 {errorMessage}
               </p>
             ) : (
-              <p className="mt-3 text-sm text-[#8b736c]">
-                로그인 없이 바로 만들고 친구들에게 링크를 공유할 수 있어요.
+              <p className="mt-3 text-sm font-semibold text-[#8b6d62]">
+                로그인 없이 만들고, 초대 링크로 친구들을 불러올 수 있어요.
               </p>
             )}
           </form>
-        </div>
-
-        <div className="pb-8 lg:pb-0">
-          <div className="relative mx-auto max-w-md rounded-[8px] border border-[#ead7e4] bg-[#f9ddea] p-4 shadow-[0_24px_70px_rgba(98,61,82,0.16)]">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-[8px] bg-white p-3 shadow-sm">
-                <div className="aspect-[4/5] rounded-[8px] bg-[#ccecf6] p-3">
-                  <div className="flex h-full flex-col justify-between rounded-[8px] border border-white/70 bg-white/55 p-3">
-                    <span className="text-3xl" aria-hidden="true">
-                      🏖️
-                    </span>
-                    <span className="text-sm font-bold text-[#31556b]">
-                      바다 앞 숙소 후보
-                    </span>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm font-semibold text-[#4b3934]">
-                  부산 여름 여행
-                </p>
-                <p className="mt-1 text-xs text-[#8b736c]">
-                  7월 둘째 주 · 5명
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-6">
-                {samplePins.map((pin) => (
-                  <div
-                    key={pin.label}
-                    className="rounded-[8px] bg-white p-3 shadow-sm"
-                  >
-                    <div
-                      className={`mb-3 inline-flex size-10 items-center justify-center rounded-[8px] text-xl ${pin.tone}`}
-                      aria-hidden="true"
-                    >
-                      {pin.emoji}
-                    </div>
-                    <p className="text-sm font-bold text-[#3a2925]">
-                      {pin.label}
-                    </p>
-                    <p className="mt-1 text-xs text-[#8b736c]">{pin.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <div className="rounded-[8px] bg-white px-3 py-4 text-center shadow-sm">
-                <p className="text-xl" aria-hidden="true">
-                  ⭐
-                </p>
-                <p className="mt-2 text-xs font-semibold text-[#5d4640]">
-                  꼭 가고 싶음
-                </p>
-              </div>
-              <div className="rounded-[8px] bg-white px-3 py-4 text-center shadow-sm">
-                <p className="text-xl" aria-hidden="true">
-                  ❤️
-                </p>
-                <p className="mt-2 text-xs font-semibold text-[#5d4640]">
-                  가고 싶음
-                </p>
-              </div>
-              <div className="rounded-[8px] bg-white px-3 py-4 text-center shadow-sm">
-                <p className="text-xl" aria-hidden="true">
-                  📝
-                </p>
-                <p className="mt-2 text-xs font-semibold text-[#5d4640]">
-                  버킷리스트
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </main>

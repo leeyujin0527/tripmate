@@ -117,11 +117,62 @@ type DateStepProps = {
   onConfirmed: () => void;
 };
 
+type BucketMember = {
+  id?: string;
+  memberId?: string;
+  nickname?: string;
+  name?: string;
+};
+
 type BucketItem = {
-  bucketId: string;
+  id?: string;
+  bucketId?: string;
+  memberId?: string;
   content: string;
-  author: { memberId: string; nickname: string };
-  createdAt: string;
+  author?: { memberId: string; nickname: string };
+  member?: BucketMember;
+  createdAt?: string;
+};
+
+type SummaryMember =
+  | string
+  | {
+      id?: string;
+      memberId?: string;
+      nickname?: string;
+      name?: string;
+    };
+
+type SummaryPin = {
+  id?: string;
+  pinId?: string;
+  title?: string | null;
+  memo?: string | null;
+  previewTitle?: string | null;
+  mustCount?: number;
+  wantCount?: number;
+  reactionCounts?: {
+    mustCount?: number;
+    wantCount?: number;
+  };
+};
+
+type RoomSummary = {
+  roomTitle: string;
+  confirmedDate: {
+    startDate: string | null;
+    endDate: string | null;
+  } | null;
+  members: SummaryMember[];
+  topMustPins: SummaryPin[];
+  topWantPins: SummaryPin[];
+  pinCount: number;
+  bucketCount: number;
+};
+
+type HomeTabProps = {
+  room: Room;
+  roomId: string;
 };
 
 const tabs: TabItem[] = [
@@ -135,6 +186,26 @@ const defaultPinForm: PinForm = {
   url: "",
   memo: "",
 };
+
+const dateMemberColors = [
+  "bg-pink-200",
+  "bg-violet-200",
+  "bg-sky-200",
+  "bg-emerald-200",
+  "bg-amber-200",
+  "bg-rose-200",
+  "bg-indigo-200",
+];
+
+const bucketPastelColors = [
+  "bg-pink-50",
+  "bg-violet-50",
+  "bg-sky-50",
+  "bg-emerald-50",
+  "bg-amber-50",
+  "bg-rose-50",
+  "bg-indigo-50",
+];
 
 const getStorageKey = (roomId: string) => `tripmate_member_${roomId}`;
 
@@ -283,13 +354,54 @@ const getStatusMemberNames = (status: AvailableDateStatus) =>
 const getStatusMemberIds = (status: AvailableDateStatus) =>
   status.members?.map((availableMember) => availableMember.id) ?? [];
 
+const formatDateWithDots = (dateKey: string | null) =>
+  dateKey ? dateKey.replaceAll("-", ".") : "";
+
+const formatSummaryDate = (confirmedDate: RoomSummary["confirmedDate"]) => {
+  if (!confirmedDate?.startDate || !confirmedDate.endDate) {
+    return "📅 여행 날짜를 정하는 중";
+  }
+
+  const startDate = formatDateWithDots(confirmedDate.startDate);
+  const endDate = formatDateWithDots(confirmedDate.endDate);
+
+  return startDate === endDate ? startDate : `${startDate} ~ ${endDate}`;
+};
+
+const getSummaryMemberKey = (member: SummaryMember, index: number) =>
+  typeof member === "string"
+    ? `${member}-${index}`
+    : member.id ?? member.memberId ?? member.nickname ?? `member-${index}`;
+
+const getSummaryMemberName = (member: SummaryMember) =>
+  typeof member === "string"
+    ? member
+    : member.nickname ?? member.name ?? "익명";
+
+const getSummaryPinKey = (pin: SummaryPin, index: number) =>
+  pin.pinId ?? pin.id ?? `${pin.title ?? "pin"}-${index}`;
+
+const getSummaryPinTitle = (pin: SummaryPin) =>
+  pin.previewTitle?.trim() ||
+  pin.title?.trim() ||
+  pin.memo?.trim() ||
+  "여행 장소";
+
+const getSummaryPinCount = (
+  pin: SummaryPin,
+  reactionType: ReactionType,
+) =>
+  reactionType === "MUST"
+    ? pin.mustCount ?? pin.reactionCounts?.mustCount ?? 0
+    : pin.wantCount ?? pin.reactionCounts?.wantCount ?? 0;
+
 function InviteLinkCard({ inviteUrl, isCopied, onCopy }: InviteLinkCardProps) {
   return (
-    <div className="rounded-[8px] border border-[#f2d4e1] bg-[#fffafd] p-3">
+    <div className="rounded-[8px] border border-[#ead8d0] bg-white/70 p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-[#b94a6b]">초대 링크</p>
-          <p className="mt-1 truncate text-sm font-medium text-[#5d4640]">
+          <p className="text-xs font-bold text-[#b76478]">초대 링크</p>
+          <p className="mt-1 truncate text-sm font-semibold text-[#5d4640]">
             {inviteUrl || "초대 링크를 준비 중이에요"}
           </p>
         </div>
@@ -297,7 +409,7 @@ function InviteLinkCard({ inviteUrl, isCopied, onCopy }: InviteLinkCardProps) {
           type="button"
           onClick={onCopy}
           disabled={!inviteUrl}
-          className="h-10 shrink-0 rounded-[8px] bg-[#f26788] px-3 text-sm font-bold text-white shadow-sm hover:bg-[#de5879]"
+          className="h-10 shrink-0 rounded-[8px] bg-[#df7f95] px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
         >
           {isCopied ? "복사됨" : "복사"}
         </Button>
@@ -336,6 +448,380 @@ const parseStoredMember = (roomId: string): MemberStorage | null => {
   }
 };
 
+function HomeEmptyCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="tripmate-card rounded-[8px] border-dashed p-5 text-center">
+      <p className="text-3xl" aria-hidden="true">
+        {icon}
+      </p>
+      <p className="mt-3 text-base font-bold text-[#3b2926]">{title}</p>
+      <p className="mt-2 text-sm font-medium leading-6 text-[#7b6a63]">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function HomeTab({ room, roomId }: HomeTabProps) {
+  const [summary, setSummary] = useState<RoomSummary | null>(null);
+  const [homeBuckets, setHomeBuckets] = useState<BucketItem[]>([]);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState("");
+
+  const fetchSummary = useCallback(async () => {
+    setIsLoadingSummary(true);
+    setSummaryError("");
+
+    try {
+      const [summaryResponse, bucketsResponse] = await Promise.all([
+        fetch(`/api/rooms/${encodeURIComponent(roomId)}/summary`),
+        fetch(`/api/rooms/${encodeURIComponent(roomId)}/buckets`),
+      ]);
+      const summaryResult = (await summaryResponse.json()) as
+        | ApiSuccess<RoomSummary>
+        | ApiError;
+      const bucketsResult = (await bucketsResponse.json()) as
+        | ApiSuccess<BucketItem[]>
+        | ApiError;
+
+      if (!summaryResponse.ok || !summaryResult.success) {
+        throw new Error(
+          summaryResult.success
+            ? "홈 화면을 불러오지 못했어요."
+            : summaryResult.message,
+        );
+      }
+
+      if (!bucketsResponse.ok || !bucketsResult.success) {
+        throw new Error(
+          bucketsResult.success
+            ? "버킷리스트를 불러오지 못했어요."
+            : bucketsResult.message,
+        );
+      }
+
+      setSummary(summaryResult.data);
+      setHomeBuckets(bucketsResult.data);
+    } catch (error) {
+      setSummaryError(
+        error instanceof Error
+          ? error.message
+          : "홈 화면을 불러오지 못했어요.",
+      );
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      fetchSummary();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [fetchSummary]);
+
+  const fallbackConfirmedDate =
+    room.confirmedStartDate && room.confirmedEndDate
+      ? {
+          startDate: room.confirmedStartDate,
+          endDate: room.confirmedEndDate,
+        }
+      : null;
+  const roomTitle = summary?.roomTitle ?? room.title;
+  const confirmedDate = summary?.confirmedDate ?? fallbackConfirmedDate;
+  const members = summary?.members ?? [];
+  const topMustPins = summary?.topMustPins ?? [];
+  const topWantPins = summary?.topWantPins ?? [];
+  const pinCount = summary?.pinCount ?? 0;
+  const moodPins = [...topMustPins, ...topWantPins].slice(0, 4);
+  const recentBuckets = homeBuckets.slice(-3).reverse();
+
+  return (
+    <section className="mt-5 space-y-4">
+      <div className="tripmate-paper overflow-hidden rounded-[8px] border border-[#ead8d0] shadow-[0_24px_70px_rgba(111,75,58,0.12)]">
+        <div className="p-5 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#c07084]">
+                travel cover
+              </p>
+              <h2 className="mt-2 wrap-break-word text-4xl font-black leading-tight text-[#32231f] sm:text-5xl">
+                🌊 {roomTitle}
+              </h2>
+              <p className="mt-4 inline-flex rounded-full bg-white/75 px-4 py-2 text-sm font-bold text-[#7b5f54] shadow-sm">
+                {formatSummaryDate(confirmedDate)}
+              </p>
+              <p className="mt-5 max-w-md text-base font-semibold leading-8 text-[#7b5f54]">
+                친구들과 저장한 장소와 하고 싶은 순간들이 모여서 우리만의
+                여행 분위기가 만들어지고 있어요.
+              </p>
+            </div>
+            <div className="grid w-full max-w-xs grid-cols-2 gap-3 sm:shrink-0">
+              <div className="tripmate-sticker aspect-[4/5] rounded-[8px] bg-[#dff3fb] p-3 text-[#31556b]">
+                <span className="text-3xl" aria-hidden="true">
+                  📌
+                </span>
+                <p className="mt-8 text-sm font-black leading-snug">
+                  저장한 장소를
+                  <br />
+                  같이 고르는 중
+                </p>
+              </div>
+              <div className="tripmate-sticker mt-8 aspect-square rounded-[8px] bg-[#ffe6ee] p-3 text-[#7a2f48]">
+                <span className="text-3xl" aria-hidden="true">
+                  ✨
+                </span>
+                <p className="mt-5 text-sm font-black leading-snug">
+                  하고 싶은
+                  <br />
+                  순간들
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isLoadingSummary ? (
+        <div className="tripmate-card rounded-[8px] p-6 text-center">
+          <p className="text-2xl" aria-hidden="true">
+            🧳
+          </p>
+          <p className="mt-3 text-base font-bold text-[#3b2926]">
+            여행 준비 노트를 불러오는 중이에요
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="h-24 rounded-[8px] bg-[#fff0f4]" />
+            ))}
+          </div>
+        </div>
+      ) : summaryError ? (
+        <div
+          className="tripmate-card rounded-[8px] p-6 text-center"
+          role="alert"
+        >
+          <p className="text-2xl" aria-hidden="true">
+            💌
+          </p>
+          <p className="mt-3 text-base font-bold text-[#3b2926]">
+            홈 화면을 잠시 불러오지 못했어요
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#8b736c]">
+            {summaryError}
+          </p>
+          <Button
+            type="button"
+            onClick={fetchSummary}
+            className="mt-4 h-10 rounded-[8px] bg-[#df7f95] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#cf6f86]"
+          >
+            다시 불러오기
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="tripmate-card rounded-[8px] p-5">
+            <h3 className="text-lg font-bold text-[#241817]">
+              👯 함께 떠나는 사람들
+            </h3>
+            {members.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {members.map((member, index) => (
+                  <span
+                    key={getSummaryMemberKey(member, index)}
+                    className="rounded-full border border-[#ead8d0] bg-[#fff8fb] px-4 py-2 text-sm font-bold text-[#7a4a57] shadow-sm"
+                  >
+                    {getSummaryMemberName(member)}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-[#8b736c]">
+                초대 링크를 보내고 함께 떠날 친구를 기다리는 중이에요.
+              </p>
+            )}
+          </div>
+
+          <div className="tripmate-card rounded-[8px] p-5">
+            <h3 className="text-lg font-bold text-[#241817]">
+              📌 최근 저장된 핀 미리보기
+            </h3>
+            {moodPins.length > 0 ? (
+              <div className="mt-4 columns-1 gap-3 sm:columns-2">
+                {moodPins.map((pin, index) => (
+                  <article
+                    key={getSummaryPinKey(pin, index)}
+                    className={`mb-3 break-inside-avoid rounded-[8px] p-4 shadow-sm ${
+                      index % 2 === 0
+                        ? "bg-[#fff2d8] text-[#76552a]"
+                        : "bg-[#fff0f4] text-[#7a2f48]"
+                    }`}
+                  >
+                    <p className="text-3xl" aria-hidden="true">
+                      {index % 2 === 0 ? "⭐" : "❤️"}
+                    </p>
+                    <p className="mt-6 wrap-break-word text-lg font-black leading-snug">
+                      {getSummaryPinTitle(pin)}
+                    </p>
+                    <p className="mt-2 text-sm font-bold opacity-75">
+                      친구들이 눈여겨보는 장소
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <HomeEmptyCard
+                  icon="📌"
+                  title="아직 저장된 장소가 없어요"
+                  description="릴스나 블로그 링크를 저장해보세요"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="tripmate-card rounded-[8px] p-5">
+              <h3 className="text-lg font-bold text-[#241817]">
+                🔥 다들 가장 가고 싶어 하는 곳
+              </h3>
+              {topMustPins.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {topMustPins.map((pin, index) => (
+                    <article
+                      key={getSummaryPinKey(pin, index)}
+                      className="rounded-[8px] bg-[#fff7dc] p-4 shadow-sm"
+                    >
+                      <p className="wrap-break-word text-base font-bold text-[#4b3410]">
+                        ⭐ {getSummaryPinTitle(pin)}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-[#7a6220]">
+                        {getSummaryPinCount(pin, "MUST")}명이 꼭 가고 싶어 해
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : pinCount === 0 ? (
+                <div className="mt-4">
+                  <HomeEmptyCard
+                    icon="📌"
+                    title="아직 저장된 장소가 없어요"
+                    description="릴스나 블로그 링크를 저장해보세요"
+                  />
+                </div>
+              ) : (
+                <p className="mt-4 rounded-[8px] bg-[#fff7dc] p-4 text-sm font-semibold leading-6 text-[#7a6220]">
+                  별표가 모이면 친구들이 제일 기대하는 장소가 여기에 떠요.
+                </p>
+              )}
+            </div>
+
+            <div className="tripmate-card rounded-[8px] p-5">
+              <h3 className="text-lg font-bold text-[#241817]">
+                💖 관심 많은 장소
+              </h3>
+              {topWantPins.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {topWantPins.map((pin, index) => (
+                    <article
+                      key={getSummaryPinKey(pin, index)}
+                      className="rounded-[8px] bg-[#fff0f4] p-4 shadow-sm"
+                    >
+                      <p className="wrap-break-word text-base font-bold text-[#7a2f48]">
+                        ❤️ {getSummaryPinTitle(pin)}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-[#b94a6b]">
+                        {getSummaryPinCount(pin, "WANT")}명이 가고 싶어 해
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : pinCount === 0 ? (
+                <p className="mt-4 rounded-[8px] bg-[#fff0f4] p-4 text-sm font-semibold leading-6 text-[#b94a6b]">
+                  장소를 저장하면 친구들의 관심이 쌓이는 걸 볼 수 있어요.
+                </p>
+              ) : (
+                <p className="mt-4 rounded-[8px] bg-[#fff0f4] p-4 text-sm font-semibold leading-6 text-[#b94a6b]">
+                  하트가 쌓이면 가볍게 들러보고 싶은 곳이 여기에 모여요.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="tripmate-card rounded-[8px] bg-[#fffdf7] p-5">
+            <h3 className="text-lg font-bold text-[#241817]">
+              📝 최근 버킷리스트
+            </h3>
+            {recentBuckets.length === 0 ? (
+              <div className="mt-4">
+                <HomeEmptyCard
+                  icon="✨"
+                  title="하고 싶은 걸 적어보세요"
+                  description="첫 버킷리스트를 남겨보세요"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3">
+                {recentBuckets.map((bucket, index) => {
+                  const bucketId = bucket.bucketId ?? bucket.id ?? `${bucket.content}-${index}`;
+                  const authorName =
+                    bucket.author?.nickname ??
+                    bucket.member?.nickname ??
+                    bucket.member?.name ??
+                    "익명";
+
+                  return (
+                    <article
+                      key={bucketId}
+                      className={`rounded-[8px] border border-white p-4 shadow-sm ${
+                        bucketPastelColors[index % bucketPastelColors.length]
+                      }`}
+                    >
+                      <p className="text-2xl" aria-hidden="true">
+                        {index === 0 ? "✨" : index === 1 ? "📍" : "🌿"}
+                      </p>
+                      <p className="mt-3 wrap-break-word text-base font-black leading-snug text-[#32231f]">
+                        “{bucket.content}”
+                      </p>
+                      <p className="mt-2 text-xs font-bold text-[#7b6a63]">
+                        {authorName}이 적었어요
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="tripmate-card rounded-[8px] bg-[#f4fbeb] p-5">
+            <p className="text-lg font-bold text-[#374b18]">
+              ✨ 여행 준비 중
+            </p>
+            <p className="mt-3 text-base font-semibold leading-8 text-[#52613b]">
+              친구들이 저장한 장소와
+              <br />
+              버킷리스트를 보며
+              <br />
+              우리만의 여행을 만들어가고 있어
+            </p>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function DateStep({
   room,
   roomId,
@@ -373,16 +859,6 @@ function DateStep({
     room.confirmedEndDate ?? null,
   );
 
-  const pastelColors = [
-    "bg-pink-200",
-    "bg-violet-200",
-    "bg-sky-200",
-    "bg-emerald-200",
-    "bg-amber-200",
-    "bg-rose-200",
-    "bg-indigo-200",
-  ];
-
   const { memberColorMap, memberNameMap } = useMemo(() => {
     const nameMap = new Map<string, string>();
     const ids: string[] = [];
@@ -407,7 +883,7 @@ function DateStep({
 
     const colorMap = new Map<string, string>();
     ids.forEach((id, idx) => {
-      colorMap.set(id, pastelColors[idx % pastelColors.length]);
+      colorMap.set(id, dateMemberColors[idx % dateMemberColors.length]);
     });
 
     return { memberColorMap: colorMap, memberNameMap: nameMap };
@@ -579,42 +1055,37 @@ function DateStep({
   return (
     <section className="mt-5">
       {confirmedDateLabel ? (
-        <div className="mb-4 rounded-[8px] border border-[#d7eadf] bg-[#f4fbeb] p-4">
-          <p className="text-sm font-semibold text-[#52613b]">
-            확정된 여행 날짜
-          </p>
-          <p className="mt-1 text-lg font-bold text-[#374b18]">
-            {confirmedDateLabel}
-          </p>
+        <div className="mb-4 inline-flex rounded-full border border-[#d7eadf] bg-[#f4fbeb] px-4 py-2 text-sm font-bold text-[#52613b] shadow-sm">
+          <p>📅 {confirmedDateLabel}</p>
         </div>
       ) : null}
 
-      <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-5 shadow-[0_16px_50px_rgba(114,61,85,0.1)] sm:p-6">
-        <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b94a6b]">
+      <div className="tripmate-paper rounded-[8px] border border-[#ead8d0] p-5 shadow-[0_16px_50px_rgba(111,75,58,0.1)] sm:p-6">
+        <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#b76478]">
           <CalendarDays className="size-4" aria-hidden="true" />
           날짜 맞추기
         </p>
-        <h2 className="mt-2 text-2xl font-bold leading-tight">
+        <h2 className="mt-2 text-3xl font-black leading-tight">
           우리 언제 떠날까?
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#6f5b56]">
-          가능한 날짜를 모두 골라줘. 다시 누르면 선택이 풀려.
+        <p className="mt-2 text-sm font-medium leading-6 text-[#7b5f54]">
+          가능한 날에 친구들의 색상 점이 하나씩 쌓여요.
         </p>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-[8px] border border-[#f2d4e1] bg-[#fffafd] p-3">
+          <div className="rounded-[8px] border border-[#ead8d0] bg-white/70 p-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() =>
                   setCalendarMonth((current) => addMonths(current, -1))
                 }
-                className="flex size-10 items-center justify-center rounded-[8px] bg-white text-[#7a5a53] shadow-sm transition hover:bg-[#fff0f4]"
+                className="flex size-10 items-center justify-center rounded-[8px] bg-white text-[#7a5a53] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#fff0f4]"
                 aria-label="이전 달"
               >
                 <ChevronLeft className="size-5" aria-hidden="true" />
               </button>
-              <p className="text-base font-bold text-[#241817]">
+              <p className="text-base font-black text-[#32231f]">
                 {calendarMonth.getFullYear()}년 {calendarMonth.getMonth() + 1}월
               </p>
               <button
@@ -622,7 +1093,7 @@ function DateStep({
                 onClick={() =>
                   setCalendarMonth((current) => addMonths(current, 1))
                 }
-                className="flex size-10 items-center justify-center rounded-[8px] bg-white text-[#7a5a53] shadow-sm transition hover:bg-[#fff0f4]"
+                className="flex size-10 items-center justify-center rounded-[8px] bg-white text-[#7a5a53] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#fff0f4]"
                 aria-label="다음 달"
               >
                 <ChevronRight className="size-5" aria-hidden="true" />
@@ -647,7 +1118,13 @@ function DateStep({
                   (d) => d.date === calendarDay.dateKey,
                 );
                 const membersOnDate = status
-                  ? (status.members ?? status.availableMembers?.map((n) => ({ id: n, nickname: n })) ?? [])
+                  ? (status.members ??
+                    status.availableMembers?.map((nickname) => ({
+                      id: nickname,
+                      roomId,
+                      nickname,
+                    })) ??
+                    [])
                   : [];
                 const isSelected = selectedDateSet.has(calendarDay.dateKey);
                 const isToday = calendarDay.dateKey === todayKey;
@@ -699,11 +1176,11 @@ function DateStep({
                       }
                     }}
                     aria-pressed={isSelected}
-                    className={`relative aspect-square flex flex-col items-start justify-between rounded-[10px] p-2 text-sm font-bold transition hover:shadow-sm ${
+                    className={`relative aspect-square flex flex-col items-start justify-between rounded-[8px] p-2 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
                       isInSelectingRange
-                        ? "bg-[#e8f6ff] text-[#17455f]"
+                        ? "bg-[#dff3fb] text-[#31556b]"
                         : isSelected
-                        ? "bg-[#f9ddea] text-[#8f2947] ring-2 ring-[#f2a5ba]"
+                        ? "bg-[#ffe6ee] text-[#8f2947] ring-2 ring-[#f2a5ba]"
                         : "bg-white text-[#5d4640]"
                      } ${isMostOverlap ? "ring-1 ring-[#fce7ef]" : ""} ${isToday ? "outline-2 outline-offset-1 outline-[#bfe4eb]" : ""}`}>
                     {isInConfirmedRange ? (
@@ -724,13 +1201,13 @@ function DateStep({
                     <div className="flex w-full items-end gap-1">
                       <div className="flex -space-x-1">
                         {membersOnDate.slice(0, 4).map((m, idx) => {
-                          const id = (m as any).id ?? (m as any).nickname ?? String(idx);
+                          const id = m.id || m.nickname || String(idx);
                           const color = memberColorMap.get(id) ?? "bg-pink-200";
 
                           return (
                             <span
                               key={id}
-                              title={(m as any).nickname}
+                              title={m.nickname}
                               className={`${color} inline-block h-3 w-3 rounded-full ring-2 ring-white`}
                             />
                           );
@@ -746,8 +1223,8 @@ function DateStep({
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-[#ead7e4] bg-[#fff5f0] p-4">
-            <p className="text-sm font-bold text-[#9b3f54]">참여자 레전드</p>
+          <div className="rounded-[8px] border border-[#ead8d0] bg-[#fff7ef]/85 p-4 shadow-sm">
+            <p className="text-sm font-bold text-[#9b3f54]">친구 색상 스티커</p>
             <div className="mt-3 space-y-2">
               {Array.from(memberColorMap.entries()).map(([id, color]) => {
                 const nickname = memberNameMap.get(id) ?? id;
@@ -766,7 +1243,7 @@ function DateStep({
                 type="button"
                 onClick={handleSaveDates}
                 disabled={isSavingDates}
-                className="h-12 w-full rounded-[8px] bg-[#f26788] text-base font-bold text-white shadow-sm hover:bg-[#de5879]"
+                className="h-12 w-full rounded-[8px] bg-[#df7f95] text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
               >
                 <Check className="size-4" aria-hidden="true" />
                 {isSavingDates ? "저장 중..." : "가능한 날짜 저장하기"}
@@ -787,7 +1264,7 @@ function DateStep({
                       setConfirmEnd(null);
                     }
                   }}
-                  className={`h-10 rounded-[8px] text-sm font-bold ${confirmMode ? "bg-[#241817] text-white" : "bg-white text-[#241817]"}`}
+                  className={`h-10 rounded-[8px] text-sm font-bold ${confirmMode ? "bg-[#32231f] text-white" : "bg-white text-[#32231f]"}`}
                 >
                   {confirmMode ? "선택 중" : "기간 선택"}
                 </Button>
@@ -824,7 +1301,7 @@ function DateStep({
                       setIsSavingDates(false);
                     }
                   }}
-                  className="h-10 rounded-[8px] bg-[#f4fbeb] text-[#52613b] text-sm font-bold"
+                  className="h-10 rounded-[8px] bg-[#f4fbeb] text-[#52613b] text-sm font-bold shadow-sm"
                 >
                   확정하기
                 </Button>
@@ -959,7 +1436,7 @@ export default function RoomPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [member, setMember] = useState<MemberStorage | null>(null);
   const [nickname, setNickname] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("날짜");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("홈");
   const [isLoadingRoom, setIsLoadingRoom] = useState(true);
   const [isEntering, setIsEntering] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
@@ -974,6 +1451,7 @@ export default function RoomPage() {
   const [isLoadingPins, setIsLoadingPins] = useState(false);
   const [isCreatingPin, setIsCreatingPin] = useState(false);
   const [reactingPinId, setReactingPinId] = useState<string | null>(null);
+  const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [pinError, setPinError] = useState("");
   const [pinFormError, setPinFormError] = useState("");
   const memberId = member?.memberId;
@@ -1014,11 +1492,7 @@ export default function RoomPage() {
 
         setRoom(result.data);
         setMember(storedMember);
-        setActiveTab(
-          result.data.confirmedStartDate && result.data.confirmedEndDate
-            ? "홈"
-            : "날짜",
-        );
+        setActiveTab("홈");
         setPins([]);
         setMyPinReactions(
           storedMember
@@ -1194,7 +1668,7 @@ export default function RoomPage() {
       );
       setMember(memberInfo);
       setMyPinReactions(parseStoredPinReactions(roomId, memberInfo.memberId));
-      setActiveTab("날짜");
+      setActiveTab("홈");
       setNickname("");
     } catch (error) {
       setEntryError(
@@ -1323,8 +1797,8 @@ export default function RoomPage() {
 
   if (isLoadingRoom) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-[#fffafd] px-5 text-[#241817]">
-        <div className="w-full max-w-sm rounded-[8px] border border-[#f2d4e1] bg-white p-6 text-center shadow-[0_18px_60px_rgba(114,61,85,0.13)]">
+      <main className="flex min-h-dvh items-center justify-center px-5 text-[#32231f]">
+        <div className="tripmate-card w-full max-w-sm rounded-[8px] p-6 text-center">
           <p className="text-3xl" aria-hidden="true">
             ✈️
           </p>
@@ -1337,8 +1811,8 @@ export default function RoomPage() {
 
   if (roomError || !room) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-[#fffafd] px-5 text-[#241817]">
-        <div className="w-full max-w-sm rounded-[8px] border border-[#f2d4e1] bg-white p-6 text-center shadow-[0_18px_60px_rgba(114,61,85,0.13)]">
+      <main className="flex min-h-dvh items-center justify-center px-5 text-[#32231f]">
+        <div className="tripmate-card w-full max-w-sm rounded-[8px] p-6 text-center">
           <p className="text-3xl" aria-hidden="true">
             🧳
           </p>
@@ -1351,22 +1825,19 @@ export default function RoomPage() {
     );
   }
 
-  const isTravelDateConfirmed = Boolean(
-    room.confirmedStartDate && room.confirmedEndDate,
-  );
   const confirmedDateLabel = formatConfirmedDate(room);
-  const displayTab = isTravelDateConfirmed ? activeTab : "날짜";
+  const displayTab = activeTab;
 
   return (
-    <main className="min-h-dvh bg-[#fffafd] text-[#241817]">
-      <section className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-5 py-6 sm:px-8">
+    <main className="min-h-dvh text-[#32231f]">
+      <section className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-5 sm:px-8">
         <header className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#f3cfe0] bg-white/85 px-3 py-2 text-sm font-semibold shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ead8d0] bg-white/80 px-4 py-2 text-sm font-bold shadow-sm backdrop-blur">
             <span aria-hidden="true">✈️</span>
             <span>TripMate</span>
           </div>
           {member ? (
-            <div className="rounded-full border border-[#d9ead1] bg-[#f4fbeb] px-3 py-2 text-sm font-semibold text-[#52613b]">
+            <div className="rounded-full border border-[#ead8d0] bg-[#fff7ef]/85 px-4 py-2 text-sm font-bold text-[#7b5f54] shadow-sm">
               {member.nickname} 님
             </div>
           ) : null}
@@ -1374,16 +1845,16 @@ export default function RoomPage() {
 
         {!member ? (
           <div className="flex flex-1 items-center justify-center py-10">
-            <div className="w-full max-w-md rounded-[8px] border border-[#f2d4e1] bg-white p-5 shadow-[0_20px_70px_rgba(114,61,85,0.14)] sm:p-6">
-              <div className="rounded-[8px] bg-[#f9ddea] p-4">
-                <p className="text-sm font-semibold text-[#b94a6b]">
-                  초대받은 여행방
+            <div className="tripmate-paper w-full max-w-md rounded-[8px] border border-[#ead8d0] p-5 shadow-[0_24px_70px_rgba(111,75,58,0.12)] sm:p-6">
+              <div className="rounded-[8px] bg-[#fff0f4] p-5 shadow-sm">
+                <p className="text-sm font-bold text-[#b76478]">
+                  여행 초대장
                 </p>
                 <h1 className="mt-2 text-2xl font-bold leading-snug">
                   {room.title}
                 </h1>
-                <p className="mt-3 text-sm leading-6 text-[#6f5b56]">
-                  닉네임만 적으면 바로 친구들과 여행 준비를 시작할 수 있어요.
+                <p className="mt-3 text-sm font-medium leading-6 text-[#7b5f54]">
+                  닉네임을 적고 친구들이 모으는 여행 무드보드에 들어가요.
                 </p>
               </div>
 
@@ -1413,7 +1884,7 @@ export default function RoomPage() {
                   }}
                   placeholder="예: 유진"
                   aria-invalid={Boolean(entryError)}
-                  className="mt-3 h-12 w-full rounded-[8px] border border-[#ead2df] bg-[#fffdfd] px-4 text-base outline-none transition focus:border-[#ec7896] focus:ring-4 focus:ring-[#ffd7e0]"
+                  className="mt-3 h-12 w-full rounded-[8px] border border-[#ead8d0] bg-white/85 px-4 text-base font-semibold outline-none transition placeholder:text-[#c1a69a] focus:border-[#df8aa0] focus:ring-4 focus:ring-[#ffdce5]"
                 />
                 {entryError ? (
                   <p
@@ -1432,7 +1903,7 @@ export default function RoomPage() {
                 <Button
                   type="submit"
                   disabled={isEntering}
-                  className="mt-5 h-12 w-full rounded-[8px] bg-[#f26788] text-base font-bold text-white shadow-sm hover:bg-[#de5879]"
+                  className="mt-5 h-12 w-full rounded-[8px] bg-[#df7f95] text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
                 >
                   {isEntering ? "입장하는 중..." : "입장하기"}
                 </Button>
@@ -1440,27 +1911,24 @@ export default function RoomPage() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 flex-col py-8">
-            <section className="rounded-[8px] border border-[#f2d4e1] bg-white p-5 shadow-[0_20px_70px_rgba(114,61,85,0.12)] sm:p-7">
-              <p className="inline-flex rounded-full bg-[#fff0f4] px-3 py-1.5 text-sm font-semibold text-[#b94a6b]">
-                여행 준비방
+          <div className="flex flex-1 flex-col py-6">
+            <section className="tripmate-paper rounded-[8px] border border-[#ead8d0] p-5 shadow-[0_24px_70px_rgba(111,75,58,0.11)] sm:p-7">
+              <p className="inline-flex rounded-full bg-[#fff0f4] px-4 py-2 text-sm font-bold text-[#b76478]">
+                travel scrapbook
               </p>
-              <h1 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">
+              <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl">
                 {room.title}
               </h1>
-              <p className="mt-3 text-base leading-7 text-[#6f5b56]">
+              <p className="mt-3 max-w-2xl text-base font-semibold leading-8 text-[#7b5f54]">
                 {confirmedDateLabel
-                  ? "날짜가 정해졌어요. 이제 여행 아이디어를 모아보세요."
-                  : "먼저 친구들이 가능한 날짜를 모아볼게요."}
+                  ? "날짜가 정해졌어요. 이제 마음에 드는 장소와 하고 싶은 순간을 같이 모아보세요."
+                  : "날짜는 천천히 정해도 괜찮아요. 먼저 가고 싶은 무드를 모아보세요."}
               </p>
 
               {confirmedDateLabel ? (
-                <div className="mt-4 rounded-[8px] border border-[#d7eadf] bg-[#f4fbeb] p-4">
-                  <p className="text-xs font-semibold text-[#52613b]">
-                    확정된 여행 날짜
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-[#374b18]">
-                    {confirmedDateLabel}
+                <div className="mt-4 inline-flex rounded-full border border-[#d7eadf] bg-[#f4fbeb] px-4 py-2">
+                  <p className="text-sm font-bold text-[#52613b]">
+                    📅 {confirmedDateLabel}
                   </p>
                 </div>
               ) : null}
@@ -1472,55 +1940,20 @@ export default function RoomPage() {
                   onCopy={handleCopyInviteUrl}
                 />
               </div>
-
-              <div className="mt-6 grid grid-cols-3 gap-3">
-                <div className="rounded-[8px] bg-[#e8f6ff] p-4">
-                  <p className="text-xs font-semibold text-[#31556b]">
-                    참여자 수
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-[#17455f]">1명</p>
-                </div>
-                <div className="rounded-[8px] bg-[#fff0f4] p-4">
-                  <p className="text-xs font-semibold text-[#b94a6b]">
-                    저장된 핀
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-[#7a2f48]">
-                    {pins.length}개
-                  </p>
-                </div>
-                <div className="rounded-[8px] bg-[#f4fbeb] p-4">
-                  <p className="text-xs font-semibold text-[#52613b]">
-                    버킷리스트
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-[#374b18]">0개</p>
-                </div>
-              </div>
             </section>
 
-            <nav className="mt-5 grid grid-cols-4 gap-2 rounded-[8px] border border-[#f2d4e1] bg-white p-2 shadow-sm">
+            <nav className="sticky top-3 z-10 mt-5 grid grid-cols-4 gap-2 rounded-[8px] border border-[#ead8d0] bg-white/78 p-2 shadow-[0_14px_35px_rgba(111,75,58,0.08)] backdrop-blur">
               {tabs.map((tab) => {
-                const isLockedTab =
-                  !isTravelDateConfirmed && tab.label !== "날짜";
-
                 return (
                   <button
                     key={tab.label}
                     type="button"
-                    onClick={() => {
-                      if (!isLockedTab) {
-                        setActiveTab(tab.label);
-                      }
-                    }}
-                    disabled={isLockedTab}
+                    onClick={() => setActiveTab(tab.label)}
                     aria-pressed={displayTab === tab.label}
-                    className={`flex h-16 flex-col items-center justify-center rounded-[8px] text-xs font-bold transition ${
-                      isLockedTab
-                        ? "cursor-not-allowed text-[#c2aca5] opacity-60"
-                        : "hover:bg-[#fff0f4] hover:text-[#b94a6b]"
-                    } ${
+                    className={`flex h-16 flex-col items-center justify-center rounded-[8px] text-xs font-bold transition hover:-translate-y-0.5 hover:bg-[#fff0f4] hover:text-[#b76478] ${
                       displayTab === tab.label
-                        ? "bg-[#fff0f4] text-[#b94a6b]"
-                        : "text-[#6f5b56]"
+                        ? "bg-[#fff0f4] text-[#b76478] shadow-sm"
+                        : "text-[#7b5f54]"
                     }`}
                   >
                     <span className="text-lg" aria-hidden="true">
@@ -1531,12 +1964,6 @@ export default function RoomPage() {
                 );
               })}
             </nav>
-
-            {!isTravelDateConfirmed ? (
-              <p className="mt-3 text-center text-xs font-semibold text-[#8b736c]">
-                날짜가 확정되면 홈, 핀보드, 버킷리스트를 열 수 있어요.
-              </p>
-            ) : null}
 
             {displayTab === "날짜" ? (
               <DateStep
@@ -1550,34 +1977,31 @@ export default function RoomPage() {
               <section className="mt-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#b94a6b]">
+                    <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#b76478]">
                       <Sparkles className="size-4" aria-hidden="true" />
                       핀보드
                     </p>
-                    <h2 className="mt-1 text-2xl font-bold leading-tight">
-                      여행 영감 보드
+                    <h2 className="mt-1 text-3xl font-black leading-tight">
+                      친구들이 저장한 여행 조각
                     </h2>
-                    <p className="mt-2 text-sm leading-6 text-[#6f5b56]">
-                      친구들이 발견한 릴스, 맛집 글, 지도 링크가 최신순으로
-                      모여요.
+                    <p className="mt-2 text-sm font-medium leading-6 text-[#7b5f54]">
+                      릴스, 지도, 블로그 링크를 Pinterest 보드처럼 모아봐요.
                     </p>
                   </div>
-                  <div className="hidden shrink-0 rounded-[8px] border border-[#d7eadf] bg-[#f4fbeb] px-4 py-3 text-right sm:block">
-                    <p className="text-xs font-semibold text-[#52613b]">
-                      saved
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-[#374b18]">
-                      {pins.length}
+                  <div className="hidden shrink-0 rotate-[-2deg] rounded-[8px] bg-[#fff7dc] px-4 py-3 text-right text-[#76552a] shadow-sm sm:block">
+                    <p className="text-xs font-black">moodboard</p>
+                    <p className="mt-1 text-sm font-bold">
+                      저장한 장소를 넘겨보는 중
                     </p>
                   </div>
                 </div>
 
                 <form
                   onSubmit={handleCreatePin}
-                  className="mt-5 rounded-[8px] border border-[#f2d4e1] bg-white p-4 shadow-[0_16px_50px_rgba(114,61,85,0.1)]"
+                  className="tripmate-paper mt-5 rounded-[8px] border border-[#ead8d0] p-4 shadow-[0_16px_50px_rgba(111,75,58,0.1)]"
                 >
                   <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.55fr)_auto] lg:items-end">
-                    <label className="text-sm font-semibold text-[#5d4640]">
+                    <label className="text-sm font-bold text-[#5d4640]">
                       <span className="inline-flex items-center gap-1.5">
                         <LinkIcon className="size-4" aria-hidden="true" />
                         링크
@@ -1596,10 +2020,10 @@ export default function RoomPage() {
                         placeholder="https://www.instagram.com/..."
                         inputMode="url"
                         autoComplete="url"
-                        className="mt-2 h-12 w-full rounded-[8px] border border-[#ead2df] bg-[#fffdfd] px-4 text-base outline-none transition focus:border-[#ec7896] focus:ring-4 focus:ring-[#ffd7e0]"
+                        className="mt-2 h-12 w-full rounded-[8px] border border-[#ead8d0] bg-white/85 px-4 text-base font-semibold outline-none transition placeholder:text-[#c1a69a] focus:border-[#df8aa0] focus:ring-4 focus:ring-[#ffdce5]"
                       />
                     </label>
-                    <label className="text-sm font-semibold text-[#5d4640]">
+                    <label className="text-sm font-bold text-[#5d4640]">
                       한줄 메모
                       <input
                         value={pinForm.memo}
@@ -1613,14 +2037,14 @@ export default function RoomPage() {
                           }
                         }}
                         placeholder="여기 꼭 가고 싶음"
-                        className="mt-2 h-12 w-full rounded-[8px] border border-[#ead2df] bg-[#fffdfd] px-4 text-base outline-none transition focus:border-[#ec7896] focus:ring-4 focus:ring-[#ffd7e0]"
+                        className="mt-2 h-12 w-full rounded-[8px] border border-[#ead8d0] bg-white/85 px-4 text-base font-semibold outline-none transition placeholder:text-[#c1a69a] focus:border-[#df8aa0] focus:ring-4 focus:ring-[#ffdce5]"
                       />
                     </label>
 
                     <Button
                       type="submit"
                       disabled={isCreatingPin}
-                      className="h-12 w-full rounded-[8px] bg-[#f26788] px-5 text-base font-bold text-white shadow-sm hover:bg-[#de5879] lg:w-auto"
+                      className="h-12 w-full rounded-[8px] bg-[#df7f95] px-5 text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86] lg:w-auto"
                     >
                       <Plus className="size-4" aria-hidden="true" />
                       {isCreatingPin ? "저장 중" : "저장"}
@@ -1648,18 +2072,18 @@ export default function RoomPage() {
 
                 <div className="mt-5">
                   {isLoadingPins ? (
-                    <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-6 text-center text-sm text-[#8b736c]">
+                    <div className="tripmate-card rounded-[8px] p-6 text-center text-sm font-semibold text-[#8b736c]">
                       핀을 불러오는 중이에요.
                     </div>
                   ) : pins.length === 0 ? (
-                    <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-8 text-center">
-                      <div className="mx-auto flex size-14 items-center justify-center rounded-[8px] bg-[#e8f6ff] text-[#17455f]">
+                    <div className="tripmate-card rounded-[8px] p-8 text-center">
+                      <div className="mx-auto flex size-14 items-center justify-center rounded-[8px] bg-[#dff3fb] text-[#31556b]">
                         <ImageIcon className="size-6" aria-hidden="true" />
                       </div>
-                      <p className="mt-4 text-base font-bold">
+                      <p className="mt-4 text-base font-black">
                         아직 저장된 링크가 없어요
                       </p>
-                      <p className="mt-2 text-sm text-[#8b736c]">
+                      <p className="mt-2 text-sm font-medium text-[#8b736c]">
                         첫 여행 아이디어를 남겨보세요.
                       </p>
                     </div>
@@ -1738,22 +2162,17 @@ export default function RoomPage() {
                         return (
                           <article
                             key={pin.id}
-                            className="mb-4 break-inside-avoid overflow-hidden rounded-[8px] border border-[#f0d8df] bg-white shadow-[0_14px_35px_rgba(58,42,38,0.09)]"
+                            className="mb-4 break-inside-avoid overflow-hidden rounded-[8px] border border-[#ead8d0] bg-white/90 shadow-[0_14px_35px_rgba(111,75,58,0.09)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_20px_55px_rgba(111,75,58,0.14)]"
                           >
-                            {pin.url ? (
-                              <a
-                                href={pin.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="group block focus:outline-none focus-visible:ring-4 focus-visible:ring-[#ffd7e0]"
-                              >
-                                {previewContent}
-                              </a>
-                            ) : (
-                              <div>{previewContent}</div>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPin(pin)}
+                              className="group block w-full text-left focus:outline-none focus-visible:ring-4 focus-visible:ring-[#ffd7e0]"
+                            >
+                              {previewContent}
+                            </button>
 
-                            <div className="grid grid-cols-2 gap-2 border-t border-[#f3e2e8] p-3">
+                            <div className="grid grid-cols-2 gap-2 border-t border-[#f3e2e8] bg-[#fffaf7] p-3">
                               <button
                                 type="button"
                                 disabled={reactingPinId === pin.id}
@@ -1797,22 +2216,103 @@ export default function RoomPage() {
             ) : displayTab === "버킷리스트" ? (
               <BucketListSection roomId={roomId} member={member} />
             ) : (
-              <section className="mt-5 rounded-[8px] border border-[#ead7e4] bg-[#f9ddea] p-5">
-                <p className="text-sm font-semibold text-[#b94a6b]">
-                  {displayTab === "홈"
-                    ? "여행방 홈"
-                    : `${displayTab} 준비 중`}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[#6f5b56]">
-                  {displayTab === "홈"
-                    ? "핀보드 탭에서 릴스, 지도, 블로그 링크를 먼저 모아보세요."
-                    : `${displayTab} 기능은 다음 단계에서 이어서 사용할 수 있어요.`}
-                </p>
-              </section>
+              <HomeTab room={room} roomId={roomId} />
             )}
           </div>
         )}
       </section>
+      {selectedPin ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-[#32231f]/45 px-4 py-5 backdrop-blur-sm sm:items-center sm:justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="핀 상세 보기"
+          onClick={() => setSelectedPin(null)}
+        >
+          <div
+            className="max-h-[92dvh] w-full max-w-3xl overflow-auto rounded-[8px] bg-[#fffaf4] shadow-[0_28px_90px_rgba(50,35,31,0.28)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="grid gap-0 sm:grid-cols-[0.9fr_1fr]">
+              <div className="min-h-64 bg-[#f3eadf]">
+                {selectedPin.previewImage ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={selectedPin.previewImage}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="h-full max-h-[70dvh] w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 p-8 text-center text-[#7b5f54]">
+                    <ImageIcon className="size-12" aria-hidden="true" />
+                    <p className="wrap-break-word text-lg font-black">
+                      {getPinSiteName(selectedPin) || "saved place"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#b76478]">
+                      saved pin
+                    </p>
+                    <h2 className="mt-2 wrap-break-word text-2xl font-black leading-tight text-[#32231f]">
+                      {getPinDisplayTitle(selectedPin)}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPin(null)}
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-lg font-black text-[#7b5f54] shadow-sm transition hover:bg-[#fff0f4]"
+                    aria-label="닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {selectedPin.previewDescription ? (
+                  <p className="mt-4 wrap-break-word text-sm font-medium leading-7 text-[#7b5f54]">
+                    {selectedPin.previewDescription}
+                  </p>
+                ) : null}
+
+                {selectedPin.memo ? (
+                  <p className="mt-4 wrap-break-word rounded-[8px] bg-[#fff0f4] p-4 text-sm font-bold leading-7 text-[#9b3f54]">
+                    {selectedPin.memo}
+                  </p>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#fff7dc] px-3 py-2 text-sm font-bold text-[#7a6220]">
+                    ⭐ {selectedPin.reactionCounts.mustCount}
+                  </span>
+                  <span className="rounded-full bg-[#fff0f4] px-3 py-2 text-sm font-bold text-[#b76478]">
+                    ❤️ {selectedPin.reactionCounts.wantCount}
+                  </span>
+                  <span className="rounded-full bg-[#f4fbeb] px-3 py-2 text-sm font-bold text-[#52613b]">
+                    {selectedPin.member?.nickname ?? "익명"} 저장
+                  </span>
+                </div>
+
+                {selectedPin.url ? (
+                  <a
+                    href={selectedPin.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-[8px] bg-[#df7f95] px-4 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
+                  >
+                    원본 링크 열기
+                    <ExternalLink className="size-4" aria-hidden="true" />
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -1832,44 +2332,14 @@ function BucketListSection({
   const [content, setContent] = useState("");
   const [memberMap, setMemberMap] = useState<Record<string, string>>({});
 
-  const pastel = [
-    "bg-pink-50",
-    "bg-violet-50",
-    "bg-sky-50",
-    "bg-emerald-50",
-    "bg-amber-50",
-    "bg-rose-50",
-    "bg-indigo-50",
-  ];
-
-  const fetchBuckets = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/buckets`);
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || "불러오기를 실패했어요.");
-
-      setBuckets(json.data as BucketItem[]);
-      // ensure member map is populated so author nicknames can be resolved
-      fetchMembersList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [roomId]);
-
   const fetchMembersList = useCallback(async () => {
     try {
       const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/members`);
-      const json = await res.json();
+      const json = (await res.json()) as ApiSuccess<BucketMember[]> | ApiError;
       if (!res.ok || !json.success) return;
 
       const map: Record<string, string> = {};
-      // assume json.data is array of members with { memberId | id, nickname }
-      (json.data as any[]).forEach((m) => {
+      json.data.forEach((m) => {
         const id = m.memberId ?? m.id;
         if (id) map[id] = m.nickname ?? m.name ?? map[id] ?? "익명";
       });
@@ -1879,12 +2349,46 @@ function BucketListSection({
     }
   }, [roomId]);
 
+  const fetchBuckets = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/buckets`);
+      const json = (await res.json()) as ApiSuccess<BucketItem[]> | ApiError;
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.success ? "불러오기를 실패했어요." : json.message,
+        );
+      }
+
+      setBuckets(json.data);
+      await fetchMembersList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchMembersList, roomId]);
+
   useEffect(() => {
-    fetchBuckets();
+    const timer = window.setTimeout(() => {
+      fetchBuckets();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [fetchBuckets]);
 
   useEffect(() => {
-    fetchMembersList();
+    const timer = window.setTimeout(() => {
+      fetchMembersList();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [fetchMembersList]);
 
   const handleAdd = async () => {
@@ -1944,24 +2448,29 @@ function BucketListSection({
 
   return (
     <section className="mt-5">
-      <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-[#b94a6b]">✨ 이번 여행에서 꼭 하고 싶은 건?</p>
-        <p className="mt-2 text-sm text-[#6f5b56]">사진 찍기, 맛집 가기, 밤바다 보기처럼 친구들과 하고 싶은 걸 적어봐</p>
+      <div className="tripmate-paper rounded-[8px] border border-[#ead8d0] p-5 shadow-[0_16px_50px_rgba(111,75,58,0.1)]">
+        <p className="text-sm font-bold text-[#b76478]">✨ 이번 여행에서 꼭 하고 싶은 건?</p>
+        <h2 className="mt-2 text-3xl font-black leading-tight text-[#32231f]">
+          우리만의 여행 스티커
+        </h2>
+        <p className="mt-2 text-sm font-medium leading-6 text-[#7b5f54]">
+          사진 찍기, 맛집 가기, 밤바다 보기처럼 친구들과 하고 싶은 걸 적어봐요.
+        </p>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <input
             value={content}
             onChange={(e) => { setContent(e.target.value); if (error) setError(null); }}
             placeholder="예: 광안리에서 단체 사진 찍기"
-            className="flex-1 h-12 rounded-[10px] border border-[#ead2df] bg-[#fffdfd] px-4 text-sm outline-none focus:border-[#ec7896] focus:ring-4 focus:ring-[#ffd7e0]"
+            className="h-12 flex-1 rounded-[8px] border border-[#ead8d0] bg-white/85 px-4 text-sm font-semibold outline-none placeholder:text-[#c1a69a] focus:border-[#df8aa0] focus:ring-4 focus:ring-[#ffdce5]"
           />
           <Button
             type="button"
             onClick={handleAdd}
             disabled={isSaving}
-            className="h-12 rounded-[10px] bg-[#f26788] text-white font-bold shadow-sm hover:bg-[#de5879]"
+            className="h-12 rounded-[8px] bg-[#df7f95] text-white font-bold shadow-sm transition hover:-translate-y-0.5 hover:bg-[#cf6f86]"
           >
-            {isSaving ? "추가 중..." : "버킷리스트 추가"}
+            {isSaving ? "붙이는 중..." : "스티커 붙이기"}
           </Button>
         </div>
 
@@ -1970,40 +2479,47 @@ function BucketListSection({
 
       <div className="mt-4 grid gap-3">
         {isLoading ? (
-          <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-6 text-center text-sm text-[#8b736c]">버킷리스트를 불러오는 중이에요.</div>
+          <div className="tripmate-card rounded-[8px] p-6 text-center text-sm font-semibold text-[#8b736c]">버킷리스트를 불러오는 중이에요.</div>
         ) : buckets.length === 0 ? (
-          <div className="rounded-[8px] border border-[#f2d4e1] bg-white p-8 text-center">
-            <p className="text-base font-bold">아직 작성된 버킷리스트가 없어요</p>
-            <p className="mt-2 text-sm text-[#8b736c]">친구들과 하고 싶은 걸 먼저 적어볼래요?</p>
+          <div className="tripmate-card rounded-[8px] p-8 text-center">
+            <p className="text-base font-black">아직 붙인 스티커가 없어요</p>
+            <p className="mt-2 text-sm font-medium text-[#8b736c]">친구들과 하고 싶은 걸 먼저 적어볼래요?</p>
           </div>
         ) : (
           buckets.map((b, idx) => {
-            const authorId = b.author?.memberId ?? null;
+            const bucketId = b.bucketId ?? b.id;
+            const authorId =
+              b.author?.memberId ?? b.memberId ?? b.member?.memberId ?? b.member?.id ?? null;
             const authorName =
               b.author?.nickname ??
+              b.member?.nickname ??
+              b.member?.name ??
               (authorId ? memberMap[authorId] : undefined) ??
               (member && member.memberId === authorId ? member.nickname : undefined) ??
               "익명";
 
-            const keyId = b.bucketId ?? (b as any).id ?? `bucket-${idx}`;
+            const keyId = bucketId ?? `bucket-${idx}`;
 
             return (
-              <article key={keyId} className={`relative overflow-hidden rounded-[12px] p-4 shadow-[0_10px_30px_rgba(58,42,38,0.06)] ${pastel[idx % pastel.length]} border border-white`}>
-                <p className="text-lg font-bold text-[#241817]">“{b.content}”</p>
+              <article key={keyId} className={`relative overflow-hidden rounded-[8px] p-5 shadow-[0_12px_30px_rgba(111,75,58,0.08)] transition duration-200 hover:-translate-y-0.5 ${bucketPastelColors[idx % bucketPastelColors.length]} border border-white`}>
+                <p className="text-2xl" aria-hidden="true">
+                  {idx % 3 === 0 ? "🌿" : idx % 3 === 1 ? "📍" : "✨"}
+                </p>
+                <p className="mt-3 text-lg font-black leading-snug text-[#32231f]">“{b.content}”</p>
                 <div className="mt-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-[#5d4640]"><span className="font-semibold">{authorName}</span>이 적었어요</p>
+                    <p className="text-sm text-[#5d4640]"><span className="font-bold">{authorName}</span>이 적었어요</p>
                     <p className="text-xs text-[#7b6a63]">{b.createdAt ? formatSavedDate(b.createdAt) : ""}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {member && authorId && member.memberId === authorId ? (
+                    {bucketId && member && authorId && member.memberId === authorId ? (
                       <button
                         type="button"
-                        onClick={() => handleDelete(b.bucketId)}
-                        disabled={isDeleting === b.bucketId}
-                        className="h-8 rounded-[8px] bg-white/70 px-3 text-xs font-semibold text-[#6f5b56] shadow-sm"
+                        onClick={() => handleDelete(bucketId)}
+                        disabled={isDeleting === bucketId}
+                        className="h-8 rounded-[8px] bg-white/70 px-3 text-xs font-bold text-[#6f5b56] shadow-sm transition hover:bg-white"
                       >
-                        {isDeleting === b.bucketId ? "삭제중..." : "삭제"}
+                        {isDeleting === bucketId ? "삭제중..." : "삭제"}
                       </button>
                     ) : null}
                   </div>
